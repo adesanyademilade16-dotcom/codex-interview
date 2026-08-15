@@ -403,6 +403,292 @@ textarea:focus-visible,
 }
 
 /* ─────────────────────────────────────────────
+   MODE SELECT
+───────────────────────────────────────────── */
+.mode-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mode-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mode-card:active { border-color: var(--accent); }
+
+.mode-card-tag {
+  font-family: var(--font-display);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+.mode-card h3 {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+}
+
+.mode-card p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.mode-card-cta {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* ─────────────────────────────────────────────
+   SETUP VIEW — voice options
+───────────────────────────────────────────── */
+.back-btn { margin-bottom: 16px; }
+
+.voice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.voice-option {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.voice-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.voice-option-title {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.voice-option-desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+#topic-panel .btn-primary,
+#begin-panel .btn-primary {
+  margin-top: 6px;
+}
+
+/* ─────────────────────────────────────────────
+   MODE LABEL + VOICE BAR (interview view)
+───────────────────────────────────────────── */
+.mode-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.voice-state {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.voice-viz {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+
+.voice-viz span {
+  width: 3px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 2px;
+  transition: height 0.15s ease, background 0.15s ease;
+}
+
+.voice-viz.active span {
+  background: var(--accent);
+  animation: viz-bounce 0.9s ease-in-out infinite;
+}
+
+.voice-viz.active span:nth-child(2) { animation-delay: 0.1s; }
+.voice-viz.active span:nth-child(3) { animation-delay: 0.2s; }
+.voice-viz.active span:nth-child(4) { animation-delay: 0.3s; }
+.voice-viz.active span:nth-child(5) { animation-delay: 0.4s; }
+
+@keyframes viz-bounce {
+  0%, 100% { height: 6px; }
+  50% { height: 16px; }
+}
+
+.mic-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mic-btn .mic-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.mic-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.mic-btn.active .mic-dot {
+  background: var(--warn);
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.btn-report {
+  margin-top: 10px;
+}
+
+/* ─────────────────────────────────────────────
+   REPORT VIEW
+───────────────────────────────────────────── */
+.report-score-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 20px 0 26px;
+}
+
+.report-overall {
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.report-overall-label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.report-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.report-category {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.report-category-value {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.report-category-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.report-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.report-block-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.report-block ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-block li {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.report-block p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ─────────────────────────────────────────────
    BREAKPOINTS
 ───────────────────────────────────────────── */
 @media (min-width: 480px) {

@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-view="dashboard">
+<body data-view="mode-select">
 
 <div class="app-shell">
 
@@ -20,27 +20,34 @@
     <div class="mode-banner">Practice mode — helps you prepare independently, never used during a real interview</div>
   </header>
 
-  <!-- ───────────── DASHBOARD VIEW ───────────── -->
-  <main id="view-dashboard" class="view">
-
+  <!-- ───────────── MODE SELECT VIEW ───────────── -->
+  <main id="view-mode-select" class="view">
     <section class="hero">
       <p class="eyebrow">Interview Simulator</p>
-      <h1>Practice.<br>Understand.<br><span class="brand-accent">Interview with confidence.</span></h1>
-      <button class="btn-primary" id="start-full-interview">Start Full Interview</button>
+      <h1>How do you want<br>to practice?</h1>
     </section>
 
-    <section class="panel">
-      <h2 class="panel-title">Practice Areas</h2>
-      <div class="topic-grid" id="topic-grid">
-        <button class="topic-chip" data-topic="JavaScript">JavaScript</button>
-        <button class="topic-chip" data-topic="React">React</button>
-        <button class="topic-chip" data-topic="HTML/CSS">HTML/CSS</button>
-        <button class="topic-chip" data-topic="APIs">APIs</button>
-        <button class="topic-chip" data-topic="Git">Git</button>
-        <button class="topic-chip" data-topic="System Thinking">System Thinking</button>
-        <button class="topic-chip" data-topic="Behavioral">Behavioral</button>
-        <button class="topic-chip" data-topic="UI/UX">UI/UX</button>
-      </div>
+    <section class="mode-grid">
+      <button class="mode-card" data-mode="interviewer" type="button">
+        <span class="mode-card-tag">MODE A</span>
+        <h3>AI Interviewer</h3>
+        <p>Practice answering realistic technical interview questions.</p>
+        <span class="mode-card-cta">Start Interview &rarr;</span>
+      </button>
+
+      <button class="mode-card" data-mode="candidate" type="button">
+        <span class="mode-card-tag">MODE B</span>
+        <h3>AI Candidate</h3>
+        <p>Practice interviewing by watching how a personalized candidate answers.</p>
+        <span class="mode-card-cta">Practice as Candidate &rarr;</span>
+      </button>
+
+      <button class="mode-card" data-mode="live" type="button">
+        <span class="mode-card-tag">FULL SIM</span>
+        <h3>Live Interview</h3>
+        <p>Simulate a complete interview from introduction to final evaluation.</p>
+        <span class="mode-card-cta">Start Live Interview &rarr;</span>
+      </button>
     </section>
 
     <section class="panel">
@@ -52,7 +59,49 @@
       </div>
       <p class="empty-note" id="stat-empty-note">Complete an interview to see your scores here.</p>
     </section>
+  </main>
 
+  <!-- ───────────── VOICE / SETUP VIEW ───────────── -->
+  <main id="view-setup" class="view hidden">
+    <button class="btn-ghost back-btn" id="setup-back" type="button">&larr; Back</button>
+
+    <section class="panel">
+      <h2 class="panel-title" id="setup-title">Choose your voice mode</h2>
+      <div class="voice-options" id="voice-options">
+        <button class="voice-option" data-voice="auto" type="button">
+          <span class="voice-option-title">Auto Listen</span>
+          <span class="voice-option-desc">Speak naturally — silence is detected automatically</span>
+        </button>
+        <button class="voice-option" data-voice="manual" type="button">
+          <span class="voice-option-title">Manual Microphone</span>
+          <span class="voice-option-desc">Tap to record, tap again to send</span>
+        </button>
+        <button class="voice-option selected" data-voice="text" type="button">
+          <span class="voice-option-title">Text Only</span>
+          <span class="voice-option-desc">Type your responses</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="panel" id="topic-panel">
+      <h2 class="panel-title">Practice Areas</h2>
+      <div class="topic-grid" id="topic-grid">
+        <button class="topic-chip" data-topic="JavaScript">JavaScript</button>
+        <button class="topic-chip" data-topic="React">React</button>
+        <button class="topic-chip" data-topic="HTML/CSS">HTML/CSS</button>
+        <button class="topic-chip" data-topic="APIs">APIs</button>
+        <button class="topic-chip" data-topic="Git">Git</button>
+        <button class="topic-chip" data-topic="System Thinking">System Thinking</button>
+        <button class="topic-chip" data-topic="Behavioral">Behavioral</button>
+        <button class="topic-chip" data-topic="UI/UX">UI/UX</button>
+      </div>
+      <button class="btn-primary" id="start-full-interview">Start Full Interview</button>
+    </section>
+
+    <section class="panel hidden" id="begin-panel">
+      <p class="empty-note" id="begin-desc"></p>
+      <button class="btn-primary" id="begin-session">Begin</button>
+    </section>
   </main>
 
   <!-- ───────────── INTERVIEW VIEW ───────────── -->
@@ -60,7 +109,18 @@
 
     <div class="interview-header">
       <button class="btn-ghost" id="exit-interview" type="button">&larr; End &amp; exit</button>
+      <span class="mode-label" id="mode-label"></span>
       <div class="tech-tracker" id="tech-tracker" aria-live="polite"></div>
+    </div>
+
+    <div class="voice-bar hidden" id="voice-bar">
+      <span class="voice-state" id="voice-state">Idle</span>
+      <div class="voice-viz" id="voice-viz" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <button class="mic-btn" id="mic-btn" type="button" aria-label="Toggle microphone">
+        <span class="mic-dot"></span>
+      </button>
     </div>
 
     <div class="transcript" id="transcript" aria-live="polite"></div>
@@ -76,6 +136,13 @@
       <button class="btn-primary" id="send-btn" type="submit">Send</button>
     </form>
 
+    <button class="btn-primary btn-report" id="get-report-btn" type="button">End &amp; get final report</button>
+  </main>
+
+  <!-- ───────────── REPORT VIEW ───────────── -->
+  <main id="view-report" class="view hidden">
+    <button class="btn-ghost back-btn" id="report-back" type="button">&larr; Back to menu</button>
+    <div id="report-content"></div>
   </main>
 
 </div>
