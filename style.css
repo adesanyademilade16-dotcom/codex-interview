@@ -698,3 +698,7 @@ textarea:focus-visible,
 @media (min-width: 768px) {
   .topbar, .view, #view-interview { padding-left: 0; padding-right: 0; }
 }
+
+/* Codex Interview v2 additive voice/streaming polish */
+.msg-interviewer, .msg-candidate { white-space: pre-wrap; }
+.voice-state { min-width: 120px; }

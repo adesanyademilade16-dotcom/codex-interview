@@ -74,6 +74,12 @@ let currentQuestion = "";
 let lastQuestion = null;
 let lastAnswer = null;
 
+// UPGRADE: explicit turn/session guards. These sit alongside the original
+// state instead of replacing it, preventing duplicate submits and AI self-loops.
+let turnInFlight = false;
+let sessionPhase = "idle"; // idle | waiting-human | ai-thinking | ai-speaking | completed
+let speechRequestId = 0;
+
 const TECH_KEYWORDS = [
   "React", "TypeScript", "JavaScript", "Supabase", "Firebase", "PostgreSQL",
   "Tailwind", "Figma", "Git", "GitHub", "Vercel", "Netlify", "API", "REST",
@@ -207,6 +213,10 @@ function resetSessionState() {
   currentQuestion = "";
   lastQuestion = null;
   lastAnswer = null;
+  turnInFlight = false;
+  sessionPhase = "idle";
+  speechRequestId++;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   reviewBtn.disabled = true;
 }
 
@@ -232,19 +242,26 @@ async function beginInterviewerSession(fullSystemPrompt, label) {
   showView("interview");
   configureInterviewChrome();
   await startVoiceIfNeeded();
+  sessionPhase = "ai-thinking";
   setStatus("thinking");
 
   const kickoff = [{ role: "user", content: "(interview session started)" }];
 
   try {
-    const result = await callChat(systemPrompt, kickoff);
+    const result = await callChatPreferred(systemPrompt, kickoff, { stream: true });
     const { content, complete } = extractCompletion(result.content);
-    addMessage("interviewer", content);
+    if (!result.rendered) addMessage("interviewer", content);
     history.push({ role: "assistant", content: result.content });
     currentQuestion = content;
-    setStatus("ready");
-    if (complete) await generateFinalReport(false);
-    else await resumeListeningIfAuto();
+    if (complete) {
+      sessionPhase = "completed";
+      await generateFinalReport(false);
+    } else {
+      sessionPhase = "waiting-human";
+      await speakAIIfVoice(content);
+      setStatus("ready");
+      await resumeListeningIfAuto();
+    }
   } catch (err) {
     setStatus("error", "Couldn't reach the interviewer. Check your connection and try again.");
   }
@@ -259,6 +276,7 @@ async function beginCandidateSession() {
   showView("interview");
   configureInterviewChrome();
   await startVoiceIfNeeded();
+  sessionPhase = "waiting-human";
   setStatus("ready", "Your turn — ask Adesanya a question");
   await resumeListeningIfAuto();
 }
@@ -274,6 +292,12 @@ async function handleSubmit(e) {
 }
 
 async function submitTurn(text) {
+  // Never allow two user turns to enter the AI pipeline simultaneously.
+  // This is especially important with VAD + manual typing + mobile taps.
+  if (turnInFlight || sessionPhase === "completed") return;
+  turnInFlight = true;
+  sessionPhase = "ai-thinking";
+
   const humanRole = currentMode === "candidate" ? "you" : "candidate";
   addMessage(humanRole, text);
   history.push({ role: "user", content: text });
@@ -291,22 +315,27 @@ async function submitTurn(text) {
   await pauseListeningWhileBusy();
 
   try {
-    const result = await callChat(systemPrompt, history);
+    const result = await callChatPreferred(systemPrompt, history, { stream: true });
     const { content, complete } = extractCompletion(result.content);
     const aiRole = currentMode === "candidate" ? "candidate" : "interviewer";
-    addMessage(aiRole, content);
+    if (!result.rendered) addMessage(aiRole, content);
     history.push({ role: "assistant", content: result.content });
     currentQuestion = content;
-    setStatus("ready");
     if (complete) {
+      sessionPhase = "completed";
       await generateFinalReport(false);
     } else {
+      sessionPhase = "ai-speaking";
+      await speakAIIfVoice(content);
+      sessionPhase = "waiting-human";
+      setStatus("ready");
       await resumeListeningIfAuto();
     }
   } catch (err) {
     setStatus("error", "AI is temporarily unavailable. Please try sending that again.");
   } finally {
     sendBtn.disabled = false;
+    turnInFlight = false;
   }
 }
 
@@ -319,6 +348,9 @@ function extractCompletion(raw) {
 }
 
 function exitInterview() {
+  speechRequestId++;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  sessionPhase = "completed";
   stopVoice();
   showView("mode-select");
   resetSessionState();
@@ -452,6 +484,115 @@ async function callChat(system, messages) {
   });
   if (!res.ok) throw new Error(`chat request failed (${res.status})`);
   return res.json();
+}
+
+
+// ─────────────────────────────────────────────
+// UPGRADE: streamed chat + safe fallback
+//
+// The original /chat request remains untouched above. This companion path is
+// used opportunistically and falls back to it if streaming is unavailable.
+// ─────────────────────────────────────────────
+async function callChatPreferred(system, messages, options = {}) {
+  if (!options.stream || !window.ReadableStream) return callChat(system, messages);
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ system, messages }),
+    });
+  } catch (_) {
+    return callChat(system, messages);
+  }
+
+  if (!response.ok || !response.body) return callChat(system, messages);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let provider = null;
+  let model = null;
+  let bubble = null;
+
+  const createStreamingBubble = () => {
+    if (bubble) return;
+    const role = currentMode === "candidate" ? "candidate" : "interviewer";
+    const div = document.createElement("div");
+    div.className = `msg msg-${role}`;
+    const label = document.createElement("span");
+    label.className = "msg-label";
+    label.textContent = ROLE_LABELS[role] || "AI";
+    div.appendChild(label);
+    const textNode = document.createTextNode("");
+    div.appendChild(textNode);
+    transcriptEl.appendChild(div);
+    bubble = { div, textNode };
+  };
+
+  const consumeEvent = (event) => {
+    for (const line of event.split("\n")) {
+      if (!line.startsWith("data:")) continue;
+      const raw = line.slice(5).trim();
+      if (!raw) continue;
+      let data;
+      try { data = JSON.parse(raw); } catch (_) { continue; }
+      if (data.type === "meta") {
+        provider = data.provider || null;
+        model = data.model || null;
+      } else if (data.type === "delta") {
+        if (!bubble) createStreamingBubble();
+        content += data.content || "";
+        bubble.textNode.nodeValue = content;
+        transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      } else if (data.type === "done" && !content) {
+        content = data.content || "";
+      } else if (data.type === "error") {
+        throw new Error(data.error || "Streaming chat failed");
+      }
+    }
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
+      for (const event of events) consumeEvent(event);
+    }
+    if (buffer.trim()) consumeEvent(buffer);
+    if (!content) throw new Error("Empty streamed response");
+    return { content, provider, model, rendered: Boolean(bubble) };
+  } catch (_) {
+    // Remove an incomplete streaming bubble before falling back to the original
+    // request, so the user never sees two AI answers for one turn.
+    if (bubble?.div?.isConnected) bubble.div.remove();
+    return callChat(system, messages);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function speakAIIfVoice(text) {
+  if (selectedVoice === "text" || !("speechSynthesis" in window) || !text) return Promise.resolve();
+  const requestId = ++speechRequestId;
+  window.speechSynthesis.cancel();
+  return new Promise((resolve) => {
+    const utterance = new SpeechSynthesisUtterance(text.replace(/\[\[INTERVIEW_COMPLETE\]\]/g, ""));
+    utterance.rate = 1.02;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    utterance.onstart = () => setVoiceState("thinking");
+    utterance.onend = () => {
+      if (requestId === speechRequestId) resolve();
+    };
+    utterance.onerror = () => resolve();
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 async function transcribeBlob(blob) {
@@ -677,7 +818,7 @@ function setVoiceState(state) {
 
 // ── Manual mode ────────────────────────────────
 function handleMicTap() {
-  if (selectedVoice !== "manual") return;
+  if (selectedVoice !== "manual" || turnInFlight || sessionPhase === "completed" || sessionPhase === "ai-speaking") return;
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
   } else {
