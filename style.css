@@ -989,6 +989,35 @@ textarea:focus-visible,
   gap: 14px;
 }
 
+/* Candidate voice mode: keep the microphone below the conversation, centered. */
+@media (max-width: 1099px) {
+  #view-interview.candidate-mode {
+    display: flex;
+  }
+
+  #view-interview.candidate-mode .interview-header { order: 1; }
+  #view-interview.candidate-mode .transcript { order: 2; min-height: 0; flex: 1 1 auto; }
+  #view-interview.candidate-mode .status-row { order: 3; }
+  #view-interview.candidate-mode .response-form { order: 4; }
+  #view-interview.candidate-mode .voice-bar {
+    order: 5;
+    position: sticky;
+    bottom: 8px;
+    z-index: 8;
+    align-self: center;
+    width: min(100%, 280px);
+    margin: 10px auto 0;
+    padding: 10px 18px;
+    border-radius: 999px;
+    justify-content: center;
+    backdrop-filter: blur(12px);
+  }
+
+  #view-interview.candidate-mode .voice-state {
+    display: none;
+  }
+}
+
 #view-interview.candidate-mode .voice-state {
   flex: 0 0 auto;
   text-align: center;

@@ -139,6 +139,17 @@
     <button class="btn-primary btn-report" id="get-report-btn" type="button">End &amp; get final report</button>
   </main>
 
+  <!-- ───────────── CONFIRM END OVERLAY ───────────── -->
+  <div class="confirm-overlay hidden" id="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-message">
+    <div class="confirm-card">
+      <p class="panel-title" id="confirm-message">End this interview?</p>
+      <div class="confirm-actions">
+        <button class="btn-ghost" id="confirm-continue" type="button">Continue</button>
+        <button class="btn-primary" id="confirm-end" type="button">End Interview</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ───────────── REPORT VIEW ───────────── -->
   <main id="view-report" class="view hidden">
     <button class="btn-ghost back-btn" id="report-back" type="button">&larr; Back to menu</button>

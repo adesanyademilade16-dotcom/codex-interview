@@ -283,17 +283,26 @@ document.getElementById("report-back").addEventListener("click", () => {
 responseForm.addEventListener("submit", handleSubmit);
 reviewBtn.addEventListener("click", handleReview);
 getReportBtn.addEventListener("click", () => showEndConfirm());
-confirmContinueBtn.addEventListener("click", () => confirmOverlay.classList.add("hidden"));
-confirmEndBtn.addEventListener("click", () => {
-  confirmOverlay.classList.add("hidden");
-  endInterviewNow(true);
-});
+if (confirmContinueBtn && confirmOverlay) {
+  confirmContinueBtn.addEventListener("click", () => confirmOverlay.classList.add("hidden"));
+}
+if (confirmEndBtn) {
+  confirmEndBtn.addEventListener("click", () => {
+    if (confirmOverlay) confirmOverlay.classList.add("hidden");
+    endInterviewNow(true);
+  });
+}
 
 // ─────────────────────────────────────────────
 // END INTERVIEW — confirmation + finalize
 // ─────────────────────────────────────────────
 function showEndConfirm() {
-  document.getElementById("confirm-message").textContent = "End this interview?";
+  if (!confirmOverlay) {
+    if (window.confirm("End this interview?")) endInterviewNow(true);
+    return;
+  }
+  const confirmMessage = document.getElementById("confirm-message");
+  if (confirmMessage) confirmMessage.textContent = "End this interview?";
   confirmOverlay.classList.remove("hidden");
 }
 
@@ -309,7 +318,7 @@ async function endInterviewNow(manuallyTriggered) {
 // Auto-triggered when the countdown reaches zero — no confirmation needed,
 // the interview is simply over.
 async function autoEndInterview() {
-  confirmOverlay.classList.add("hidden");
+  if (confirmOverlay) confirmOverlay.classList.add("hidden");
   stopTimer();
   await generateFinalReport(false);
 }
@@ -328,7 +337,7 @@ function resetSessionState() {
   lastProcessedTranscript = "";
   reviewBtn.disabled = true;
   stopTimer();
-  confirmOverlay.classList.add("hidden");
+  if (confirmOverlay) confirmOverlay.classList.add("hidden");
 }
 
 // ─────────────────────────────────────────────
@@ -415,8 +424,8 @@ const TTS = (() => {
         const utter = new SpeechSynthesisUtterance(chunks[i]);
         if (preferredVoice) utter.voice = preferredVoice;
         // Faster and more conversational than the old 1.02 rate.
-        utter.rate = 1.14;
-        utter.pitch = 0.98;
+        utter.rate = 1.20;
+        utter.pitch = 0.97;
         utter.volume = 1;
         utter.onend = () => { i++; speakNext(); };
         utter.onerror = () => { i++; speakNext(); };
