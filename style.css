@@ -500,6 +500,168 @@ textarea:focus-visible,
   margin-top: 6px;
 }
 
+.sensitivity-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sensitivity-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.sensitivity-options {
+  display: flex;
+  gap: 8px;
+}
+
+.sensitivity-btn {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 6px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sensitivity-btn.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.sensitivity-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ─────────────────────────────────────────────
+   DURATION PICKER
+───────────────────────────────────────────── */
+.duration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.duration-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 12px 6px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.duration-chip.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.duration-custom {
+  margin-top: 12px;
+}
+
+#duration-custom-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+#duration-custom-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.duration-custom-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* ─────────────────────────────────────────────
+   TIMER
+───────────────────────────────────────────── */
+.timer-display {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.timer-display.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.timer-display.critical {
+  color: #E35D41;
+  border-color: #E35D41;
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────
+   END-INTERVIEW CONFIRMATION
+───────────────────────────────────────────── */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 15, 20, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.confirm-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.confirm-box p {
+  margin: 0 0 16px;
+  font-size: 15px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-actions button {
+  flex: 1;
+  width: auto;
+}
+
 /* ─────────────────────────────────────────────
    MODE LABEL + VOICE BAR (interview view)
 ───────────────────────────────────────────── */
@@ -636,12 +798,18 @@ textarea:focus-visible,
 .report-category {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+}
+
+.report-category-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
 }
 
 .report-category-value {
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--accent);
 }
@@ -650,6 +818,34 @@ textarea:focus-visible,
   font-size: 11px;
   color: var(--text-muted);
 }
+
+.report-bar-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.report-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+.report-block-strong {
+  border-color: rgba(79, 209, 197, 0.4);
+}
+
+.report-block-strong .report-block-label { color: var(--accent); }
+.report-block-strong li::marker { color: var(--accent); }
+
+.report-block-weak {
+  border-color: rgba(227, 179, 65, 0.4);
+}
+
+.report-block-weak .report-block-label { color: var(--warn); }
+.report-block-weak li::marker { color: var(--warn); }
 
 .report-block {
   background: var(--surface);
@@ -697,4 +893,60 @@ textarea:focus-visible,
 
 @media (min-width: 768px) {
   .topbar, .view, #view-interview { padding-left: 0; padding-right: 0; }
+}
+
+@media (min-width: 860px) {
+  .app-shell { max-width: 880px; }
+
+  .mode-grid { flex-direction: row; }
+  .mode-card { flex: 1; }
+
+  /* Interview room: composer + transcript stay centered and readable,
+     info (mode/timer/tech) and voice controls flank it as rails rather
+     than stacking on top of the conversation. */
+  #view-interview {
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .interview-header {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 5;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .transcript { padding-top: 8px; }
+
+  .report-category-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 1100px) {
+  /* Two-column room on large screens: conversation + composer on the left,
+     voice/status rail on the right. Only true direct children of the grid
+     container can be placed via grid-area, so the header (which still
+     contains the tech tracker internally) simply spans both columns. */
+  #view-interview {
+    max-width: 1040px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    grid-template-areas:
+      "header     header"
+      "transcript status"
+      "statusrow  status"
+      "compose    status"
+      "report     report";
+    column-gap: 24px;
+  }
+
+  .interview-header { grid-area: header; }
+  .transcript { grid-area: transcript; min-height: 50vh; }
+  .status-row { grid-area: statusrow; }
+  .response-form { grid-area: compose; }
+  .voice-bar { grid-area: status; flex-direction: column; align-items: stretch; height: fit-content; margin-bottom: 0; }
+  .btn-report { grid-area: report; }
 }

@@ -5,13 +5,41 @@ const API_BASE = "https://codex-interview-backend.onrender.com";
 
 // ─────────────────────────────────────────────
 // VOICE ACTIVITY DETECTION — tune these, not the logic below.
+// Three sensitivity presets; MEDIUM is the default. LOW is more forgiving
+// of natural mid-answer pauses, HIGH cuts off sooner for snappier turns.
 // ─────────────────────────────────────────────
-const VAD = {
-  SPEECH_START_THRESHOLD: 0.02,   // RMS (0-1) above which we consider speech started
-  SILENCE_DURATION: 1200,         // ms of continuous quiet before we consider the utterance over
-  MIN_SPEECH_DURATION: 400,       // ms — ignore blips shorter than this
-  MAX_RECORDING_DURATION: 60000,  // ms — hard safety cap per utterance
+const VAD_PRESETS = {
+  low: {
+    SPEECH_START_THRESHOLD: 0.025,
+    SILENCE_DURATION: 1800,
+    MIN_SPEECH_DURATION: 400,
+    MAX_RECORDING_DURATION: 60000,
+  },
+  medium: {
+    SPEECH_START_THRESHOLD: 0.02,
+    SILENCE_DURATION: 1200,
+    MIN_SPEECH_DURATION: 400,
+    MAX_RECORDING_DURATION: 60000,
+  },
+  high: {
+    SPEECH_START_THRESHOLD: 0.015,
+    SILENCE_DURATION: 800,
+    MIN_SPEECH_DURATION: 300,
+    MAX_RECORDING_DURATION: 60000,
+  },
 };
+let sensitivity = "medium"; // "low" | "medium" | "high"
+function VAD() { return VAD_PRESETS[sensitivity]; }
+
+// Brief pause after a response is displayed before auto-listening resumes.
+// Gives any lingering audio state a moment to settle and prevents the mic
+// from immediately re-triggering on the tail of the previous turn.
+const COOLDOWN_MS = 700;
+
+// Reject transcripts that are empty, filler-only, or too short to be a
+// real utterance — auto mode stays listening instead of submitting noise.
+const FILLER_ONLY = /^(um+|uh+|erm+|hmm+|mm+|ah+|okay|ok|yeah|yes|no|so|like|the|a|and)[\s.,!?]*$/i;
+const MIN_MEANINGFUL_CHARS = 4;
 
 // ─────────────────────────────────────────────
 // SYSTEM PROMPTS
@@ -73,6 +101,9 @@ let mentionedTech = new Set();
 let currentQuestion = "";
 let lastQuestion = null;
 let lastAnswer = null;
+let selectedDurationMinutes = 30; // used for interviewer/live modes only
+let timerInterval = null;
+let timerRemainingSeconds = 0;
 
 const TECH_KEYWORDS = [
   "React", "TypeScript", "JavaScript", "Supabase", "Firebase", "PostgreSQL",
@@ -104,6 +135,15 @@ const topicPanel = document.getElementById("topic-panel");
 const beginPanel = document.getElementById("begin-panel");
 const beginDesc = document.getElementById("begin-desc");
 const beginSessionBtn = document.getElementById("begin-session");
+
+const durationPanel = document.getElementById("duration-panel");
+const durationCustom = document.getElementById("duration-custom");
+const durationCustomInput = document.getElementById("duration-custom-input");
+const timerDisplayEl = document.getElementById("timer-display");
+
+const confirmOverlay = document.getElementById("confirm-overlay");
+const confirmContinueBtn = document.getElementById("confirm-continue");
+const confirmEndBtn = document.getElementById("confirm-end");
 
 const voiceBar = document.getElementById("voice-bar");
 const voiceStateEl = document.getElementById("voice-state");
@@ -140,6 +180,11 @@ function enterSetup(mode) {
   document.querySelectorAll(".voice-option").forEach((btn) => {
     btn.classList.toggle("selected", btn.dataset.voice === "text");
   });
+  document.getElementById("sensitivity-row").classList.add("hidden");
+
+  const showDuration = mode === "interviewer" || mode === "live";
+  durationPanel.classList.toggle("hidden", !showDuration);
+  if (showDuration) resetDurationPicker();
 
   if (mode === "interviewer") {
     setupTitle.textContent = "Set up your AI Interviewer session";
@@ -162,10 +207,53 @@ function enterSetup(mode) {
 
 document.getElementById("setup-back").addEventListener("click", () => showView("mode-select"));
 
+// ── Interview length picker (Interviewer / Live only) ─────
+function resetDurationPicker() {
+  selectedDurationMinutes = 30;
+  durationCustom.classList.add("hidden");
+  durationCustomInput.value = "";
+  document.querySelectorAll(".duration-chip").forEach((b) => b.classList.toggle("selected", b.dataset.minutes === "30"));
+}
+
+document.querySelectorAll(".duration-chip").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".duration-chip").forEach((b) => b.classList.toggle("selected", b === btn));
+    if (btn.dataset.minutes === "custom") {
+      durationCustom.classList.remove("hidden");
+      durationCustomInput.focus();
+      applyCustomDuration();
+    } else {
+      durationCustom.classList.add("hidden");
+      selectedDurationMinutes = Number(btn.dataset.minutes);
+    }
+  });
+});
+
+function applyCustomDuration() {
+  const val = Number(durationCustomInput.value);
+  if (Number.isFinite(val) && val >= 5 && val <= 120) {
+    selectedDurationMinutes = Math.round(val);
+  }
+}
+
+durationCustomInput.addEventListener("input", applyCustomDuration);
+
+const sensitivityRow = document.getElementById("sensitivity-row");
+
 document.querySelectorAll(".voice-option").forEach((btn) => {
   btn.addEventListener("click", () => {
     selectedVoice = btn.dataset.voice;
     document.querySelectorAll(".voice-option").forEach((b) => b.classList.toggle("selected", b === btn));
+    // Sensitivity only matters for auto-listen (it tunes silence detection);
+    // manual mode has no silence timeout and text mode has no mic at all.
+    sensitivityRow.classList.toggle("hidden", selectedVoice !== "auto");
+  });
+});
+
+document.querySelectorAll(".sensitivity-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    sensitivity = btn.dataset.sensitivity;
+    document.querySelectorAll(".sensitivity-btn").forEach((b) => b.classList.toggle("selected", b === btn));
   });
 });
 
@@ -187,14 +275,44 @@ beginSessionBtn.addEventListener("click", () => {
   }
 });
 
-document.getElementById("exit-interview").addEventListener("click", exitInterview);
+document.getElementById("exit-interview").addEventListener("click", () => showEndConfirm());
 document.getElementById("report-back").addEventListener("click", () => {
   stopVoice();
   showView("mode-select");
 });
 responseForm.addEventListener("submit", handleSubmit);
 reviewBtn.addEventListener("click", handleReview);
-getReportBtn.addEventListener("click", () => generateFinalReport(true));
+getReportBtn.addEventListener("click", () => showEndConfirm());
+confirmContinueBtn.addEventListener("click", () => confirmOverlay.classList.add("hidden"));
+confirmEndBtn.addEventListener("click", () => {
+  confirmOverlay.classList.add("hidden");
+  endInterviewNow(true);
+});
+
+// ─────────────────────────────────────────────
+// END INTERVIEW — confirmation + finalize
+// ─────────────────────────────────────────────
+function showEndConfirm() {
+  document.getElementById("confirm-message").textContent = "End this interview?";
+  confirmOverlay.classList.remove("hidden");
+}
+
+async function endInterviewNow(manuallyTriggered) {
+  stopTimer();
+  if (currentMode === "candidate") {
+    exitInterview();
+  } else {
+    await generateFinalReport(manuallyTriggered);
+  }
+}
+
+// Auto-triggered when the countdown reaches zero — no confirmation needed,
+// the interview is simply over.
+async function autoEndInterview() {
+  confirmOverlay.classList.add("hidden");
+  stopTimer();
+  await generateFinalReport(false);
+}
 
 // ─────────────────────────────────────────────
 // SESSION SETUP HELPERS
@@ -207,7 +325,109 @@ function resetSessionState() {
   currentQuestion = "";
   lastQuestion = null;
   lastAnswer = null;
+  lastProcessedTranscript = "";
   reviewBtn.disabled = true;
+  stopTimer();
+  confirmOverlay.classList.add("hidden");
+}
+
+// ─────────────────────────────────────────────
+// INTERVIEW TIMER (Interviewer / Live modes only)
+// ─────────────────────────────────────────────
+function startTimer(minutes) {
+  stopTimer();
+  timerRemainingSeconds = Math.round(minutes * 60);
+  timerDisplayEl.classList.remove("hidden");
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timerRemainingSeconds -= 1;
+    updateTimerDisplay();
+    if (timerRemainingSeconds <= 0) {
+      autoEndInterview();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+  timerDisplayEl.classList.add("hidden");
+  timerDisplayEl.classList.remove("warn", "critical");
+}
+
+function updateTimerDisplay() {
+  const clamped = Math.max(0, timerRemainingSeconds);
+  const mins = Math.floor(clamped / 60);
+  const secs = clamped % 60;
+  timerDisplayEl.textContent = `${mins}:${String(secs).padStart(2, "0")} remaining`;
+  timerDisplayEl.classList.toggle("warn", clamped <= 300 && clamped > 60);
+  timerDisplayEl.classList.toggle("critical", clamped <= 60);
+}
+
+// ─────────────────────────────────────────────
+// TEXT-TO-SPEECH — clean abstraction so a dedicated provider (e.g. ElevenLabs
+// via the backend) can replace the browser engine later without touching
+// any call site. Every call site only ever uses TTS.speak / .stop / .isSpeaking.
+//
+// Long answers are split into sentence-sized chunks and queued sequentially —
+// several mobile browsers (notably Chrome on Android) silently cut off a
+// single SpeechSynthesisUtterance after ~15 seconds, which would otherwise
+// truncate a normal 4-6 sentence candidate answer mid-word.
+// ─────────────────────────────────────────────
+const TTS = (() => {
+  let cancelled = false;
+
+  function splitIntoChunks(text) {
+    const sentences = text.match(/[^.!?]+[.!?]*(\s+|$)/g);
+    return (sentences && sentences.length ? sentences : [text]).map((s) => s.trim()).filter(Boolean);
+  }
+
+  function speak(text) {
+    return new Promise((resolve) => {
+      if (!("speechSynthesis" in window) || !text || !text.trim()) {
+        resolve();
+        return;
+      }
+      window.speechSynthesis.cancel();
+      cancelled = false;
+      const chunks = splitIntoChunks(text);
+      let i = 0;
+
+      function speakNext() {
+        if (cancelled || i >= chunks.length) {
+          resolve();
+          return;
+        }
+        const utter = new SpeechSynthesisUtterance(chunks[i]);
+        utter.rate = 1.02;
+        utter.pitch = 1.0;
+        utter.onend = () => { i++; speakNext(); };
+        utter.onerror = () => { i++; speakNext(); }; // don't hang the interview on a TTS glitch
+        window.speechSynthesis.speak(utter);
+      }
+      speakNext();
+    });
+  }
+
+  function stop() {
+    cancelled = true;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }
+
+  function isSpeaking() {
+    return "speechSynthesis" in window && window.speechSynthesis.speaking;
+  }
+
+  return { speak, stop, isSpeaking };
+})();
+
+// Speaks the AI's turn aloud when voice mode is active, locking the mic via
+// the "speaking" FSM state for the duration so the mic can never hear the
+// AI's own voice and mistake it for the candidate's next utterance.
+async function speakIfVoice(text) {
+  if (selectedVoice === "text") return;
+  setFSM("speaking");
+  await TTS.speak(text);
 }
 
 function configureInterviewChrome() {
@@ -231,6 +451,7 @@ async function beginInterviewerSession(fullSystemPrompt, label) {
   resetSessionState();
   showView("interview");
   configureInterviewChrome();
+  startTimer(selectedDurationMinutes);
   await startVoiceIfNeeded();
   setStatus("thinking");
 
@@ -243,8 +464,9 @@ async function beginInterviewerSession(fullSystemPrompt, label) {
     history.push({ role: "assistant", content: result.content });
     currentQuestion = content;
     setStatus("ready");
+    await speakIfVoice(content);
     if (complete) await generateFinalReport(false);
-    else await resumeListeningIfAuto();
+    else await enterCooldownThenResume();
   } catch (err) {
     setStatus("error", "Couldn't reach the interviewer. Check your connection and try again.");
   }
@@ -298,10 +520,11 @@ async function submitTurn(text) {
     history.push({ role: "assistant", content: result.content });
     currentQuestion = content;
     setStatus("ready");
+    await speakIfVoice(content);
     if (complete) {
       await generateFinalReport(false);
     } else {
-      await resumeListeningIfAuto();
+      await enterCooldownThenResume();
     }
   } catch (err) {
     setStatus("error", "AI is temporarily unavailable. Please try sending that again.");
@@ -363,6 +586,7 @@ async function generateFinalReport(manuallyTriggered) {
     return;
   }
 
+  stopTimer();
   stopVoice();
   setStatus("thinking", "Generating your final report…");
 
@@ -400,24 +624,30 @@ function renderReport(data) {
     for (const [key, value] of Object.entries(data.categories)) {
       const item = document.createElement("div");
       item.className = "report-category";
-      item.innerHTML = `<span class="report-category-value">${value}/10</span><span class="report-category-label">${formatLabel(key)}</span>`;
+      const pct = Math.max(0, Math.min(10, Number(value) || 0)) * 10;
+      item.innerHTML = `
+        <div class="report-category-top">
+          <span class="report-category-label">${formatLabel(key)}</span>
+          <span class="report-category-value">${value}/10</span>
+        </div>
+        <div class="report-bar-track"><div class="report-bar-fill" style="width:${pct}%"></div></div>`;
       grid.appendChild(item);
     }
     reportContent.appendChild(grid);
   }
 
   const listSections = [
-    ["Strong Areas", data.strong_areas],
-    ["Weak Areas", data.weak_areas],
-    ["Questions Missed", data.questions_missed],
-    ["Technical Corrections", data.technical_corrections],
-    ["Recommended Topics", data.recommended_topics],
+    ["Strong Areas", data.strong_areas, "strong"],
+    ["Weak Areas", data.weak_areas, "weak"],
+    ["Questions Missed", data.questions_missed, "neutral"],
+    ["Technical Corrections", data.technical_corrections, "neutral"],
+    ["Recommended Topics", data.recommended_topics, "neutral"],
   ];
 
-  for (const [label, items] of listSections) {
+  for (const [label, items, tone] of listSections) {
     if (!items || !items.length) continue;
     const block = document.createElement("div");
-    block.className = "report-block";
+    block.className = `report-block report-block-${tone}`;
     block.innerHTML = `<span class="report-block-label">${label}</span>`;
     const ul = document.createElement("ul");
     for (const item of items) {
@@ -582,6 +812,18 @@ function renderTechTracker() {
 
 // ─────────────────────────────────────────────
 // VOICE SYSTEM — manual mic + auto VAD listening
+//
+// Driven by an explicit state machine (voiceFSM) instead of loose booleans.
+// The state transitions synchronously the instant a decision is made —
+// e.g. the moment we decide an utterance is over, voiceFSM flips to
+// "transcribing" BEFORE mediaRecorder.stop() is even called. That closes
+// the race window that used to exist between "recording just stopped" and
+// "we've told the VAD loop to stop listening": previously vadSpeaking was
+// reset synchronously but the busy flag wasn't set until submitTurn() ran
+// later, after an async transcription round-trip — during that gap the
+// loop could see fresh mic input and start a second, overlapping recording.
+//
+// States: idle | listening | recording | transcribing | generating | cooldown | stopped
 // ─────────────────────────────────────────────
 let micStream = null;
 let audioCtx = null;
@@ -589,11 +831,15 @@ let analyserNode = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let vadRafId = null;
-let vadSpeaking = false;
 let vadSpeechStart = 0;
 let vadSilenceStart = 0;
 let vadMaxTimer = null;
-let voiceBusy = false; // true while processing/thinking — auto mode pauses listening
+let voiceFSM = "idle";
+let lastProcessedTranscript = ""; // guards against reprocessing the same utterance twice
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function startVoiceIfNeeded() {
   if (selectedVoice === "text") return;
@@ -601,7 +847,7 @@ async function startVoiceIfNeeded() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
-    setVoiceState("idle");
+    setFSM("idle");
     addFeedbackError("Microphone access is required for voice practice. You can continue with text mode.");
     selectedVoice = "text";
     voiceBar.classList.add("hidden");
@@ -615,15 +861,19 @@ async function startVoiceIfNeeded() {
   source.connect(analyserNode);
 
   micBtn.addEventListener("click", handleMicTap);
+  lastProcessedTranscript = "";
 
   if (selectedVoice === "auto") {
-    setVoiceState("listening");
+    setFSM("listening");
+    startVadLoop();
   } else {
-    setVoiceState("idle");
+    setFSM("idle");
   }
 }
 
 function stopVoice() {
+  setFSM("stopped");
+  TTS.stop();
   if (vadRafId) cancelAnimationFrame(vadRafId);
   vadRafId = null;
   if (vadMaxTimer) clearTimeout(vadMaxTimer);
@@ -641,22 +891,43 @@ function stopVoice() {
     audioCtx = null;
   }
   analyserNode = null;
+  lastProcessedTranscript = "";
   micBtn.removeEventListener("click", handleMicTap);
   micBtn.classList.remove("active");
 }
 
+// Called at the top of submitTurn() for every modality (voice or typed) so
+// the mic never listens while a chat request is in flight.
 async function pauseListeningWhileBusy() {
-  voiceBusy = true;
   if (vadRafId) cancelAnimationFrame(vadRafId);
   vadRafId = null;
+  setFSM("generating");
 }
 
+// Used only where there's no response-display cooldown needed (e.g. right
+// after a session starts, or after skipping an invalid transcript).
 async function resumeListeningIfAuto() {
-  voiceBusy = false;
+  if (voiceFSM === "stopped") return;
   if (selectedVoice === "auto" && analyserNode) {
-    setVoiceState("listening");
+    setFSM("listening");
     startVadLoop();
+  } else {
+    setFSM("idle");
   }
+}
+
+// Used after an AI response has just been displayed — waits briefly before
+// re-opening the mic so the turn transition feels deliberate, not jumpy.
+async function enterCooldownThenResume() {
+  if (voiceFSM === "stopped") return;
+  setFSM("cooldown");
+  await sleep(COOLDOWN_MS);
+  await resumeListeningIfAuto();
+}
+
+function setFSM(state) {
+  voiceFSM = state;
+  setVoiceState(state);
 }
 
 function setVoiceState(state) {
@@ -665,36 +936,62 @@ function setVoiceState(state) {
     idle: "Idle",
     listening: "Listening…",
     recording: "Recording…",
-    processing: "Processing audio…",
     transcribing: "Transcribing…",
+    generating: currentMode === "candidate" ? "Adesanya is thinking…" : "Interviewer is preparing the next question…",
     thinking: currentMode === "candidate" ? "Adesanya is thinking…" : "Interviewer is preparing the next question…",
+    speaking: currentMode === "candidate" ? "Adesanya is speaking…" : "Interviewer is speaking…",
+    cooldown: "One moment…",
     ready: "Ready",
+    stopped: "Idle",
   };
   voiceStateEl.textContent = labels[state] || "Idle";
-  voiceVizEl.classList.toggle("active", state === "listening" || state === "recording");
+  voiceVizEl.classList.toggle("active", state === "listening" || state === "recording" || state === "speaking");
   micBtn.classList.toggle("active", state === "recording");
 }
 
-// ── Manual mode ────────────────────────────────
+// ── Transcript validation ──────────────────────
+// Rejects empty, filler-only, or too-short transcripts so ambient noise or
+// a stray "um" never gets sent to the AI. Also rejects an exact repeat of
+// the last processed utterance (guards against any residual double-fire).
+function isValidTranscript(raw) {
+  const text = (raw || "").trim();
+  if (!text) return false;
+  if (text.length < MIN_MEANINGFUL_CHARS && !text.endsWith("?")) return false;
+  if (FILLER_ONLY.test(text)) return false;
+  if (text.toLowerCase() === lastProcessedTranscript.toLowerCase()) return false;
+  return true;
+}
+
+// ── Manual mode ─────────────────────────────────
 function handleMicTap() {
   if (selectedVoice !== "manual") return;
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop();
-  } else {
+  if (voiceFSM === "recording") {
+    // Flip state the instant we decide to stop — before the async
+    // mediaRecorder "stop" event even fires.
+    setFSM("transcribing");
+    if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+  } else if (voiceFSM === "idle" || voiceFSM === "listening") {
+    setFSM("recording");
     startRecording(async (blob) => {
       await submitAudio(blob);
     });
   }
+  // Any other state (transcribing/generating/cooldown) — ignore the tap,
+  // a turn is already in flight.
 }
 
 // ── Auto mode (VAD) ────────────────────────────
 function startVadLoop() {
   const data = new Uint8Array(analyserNode.fftSize);
+  const vad = VAD();
 
   function tick() {
-    if (!analyserNode || voiceBusy || selectedVoice !== "auto") return;
-    analyserNode.getByteTimeDomainData(data);
+    if (!analyserNode || selectedVoice !== "auto") return;
+    // Only run detection while actually listening or actively recording —
+    // any other state means a turn is already in flight, so don't reschedule.
+    if (voiceFSM !== "listening" && voiceFSM !== "recording") return;
 
+    analyserNode.getByteTimeDomainData(data);
     let sumSquares = 0;
     for (let i = 0; i < data.length; i++) {
       const v = (data[i] - 128) / 128;
@@ -703,30 +1000,34 @@ function startVadLoop() {
     const rms = Math.sqrt(sumSquares / data.length);
     const now = performance.now();
 
-    if (!vadSpeaking) {
-      if (rms > VAD.SPEECH_START_THRESHOLD) {
-        vadSpeaking = true;
+    if (voiceFSM === "listening") {
+      if (rms > vad.SPEECH_START_THRESHOLD) {
         vadSpeechStart = now;
         vadSilenceStart = 0;
-        setVoiceState("recording");
+        setFSM("recording");
         startRecording(async (blob) => {
-          vadSpeaking = false;
           await submitAudio(blob);
         });
         if (vadMaxTimer) clearTimeout(vadMaxTimer);
         vadMaxTimer = setTimeout(() => {
-          if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
-        }, VAD.MAX_RECORDING_DURATION);
+          if (mediaRecorder && mediaRecorder.state === "recording") {
+            setFSM("transcribing");
+            mediaRecorder.stop();
+          }
+        }, vad.MAX_RECORDING_DURATION);
       }
     } else {
-      if (rms > VAD.SPEECH_START_THRESHOLD) {
+      // voiceFSM === "recording"
+      if (rms > vad.SPEECH_START_THRESHOLD) {
         vadSilenceStart = 0;
       } else {
         if (!vadSilenceStart) vadSilenceStart = now;
-        const spokeLongEnough = now - vadSpeechStart > VAD.MIN_SPEECH_DURATION;
-        const quietLongEnough = now - vadSilenceStart > VAD.SILENCE_DURATION;
+        const spokeLongEnough = now - vadSpeechStart > vad.MIN_SPEECH_DURATION;
+        const quietLongEnough = now - vadSilenceStart > vad.SILENCE_DURATION;
         if (spokeLongEnough && quietLongEnough) {
           if (vadMaxTimer) clearTimeout(vadMaxTimer);
+          // Decide + transition BEFORE calling stop() — this is the fix.
+          setFSM("transcribing");
           if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
         }
       }
@@ -756,18 +1057,23 @@ function startRecording(onStop) {
 }
 
 async function submitAudio(blob) {
-  setVoiceState("processing");
+  // voiceFSM is already "transcribing" by the time we get here (set
+  // synchronously at the moment recording was stopped).
   setStatus("thinking", "Processing audio…");
   try {
-    setVoiceState("transcribing");
     const { text } = await transcribeBlob(blob);
-    if (!text || !text.trim()) {
-      addFeedbackError("Couldn't understand that recording. Please try again.");
+
+    if (!isValidTranscript(text)) {
+      // Not an error — just noise, a filler word, or a duplicate. Stay
+      // quiet in the transcript and go straight back to listening.
       setStatus("ready");
+      await sleep(250);
       await resumeListeningIfAuto();
       return;
     }
-    await submitTurn(text.trim());
+
+    lastProcessedTranscript = text.trim();
+    await submitTurn(lastProcessedTranscript);
   } catch (err) {
     addFeedbackError("Couldn't understand that recording. Please try again.");
     setStatus("ready");
