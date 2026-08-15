@@ -81,32 +81,6 @@
           <span class="voice-option-desc">Type your responses</span>
         </button>
       </div>
-
-      <div class="sensitivity-row hidden" id="sensitivity-row">
-        <span class="sensitivity-label">Response sensitivity</span>
-        <div class="sensitivity-options" id="sensitivity-options">
-          <button class="sensitivity-btn" data-sensitivity="low" type="button">Low</button>
-          <button class="sensitivity-btn selected" data-sensitivity="medium" type="button">Medium</button>
-          <button class="sensitivity-btn" data-sensitivity="high" type="button">High</button>
-        </div>
-        <span class="sensitivity-hint">How quickly a pause counts as you finishing speaking.</span>
-      </div>
-    </section>
-
-    <section class="panel hidden" id="duration-panel">
-      <h2 class="panel-title">Interview Length</h2>
-      <div class="duration-grid" id="duration-grid">
-        <button class="duration-chip" data-minutes="10" type="button">10 min</button>
-        <button class="duration-chip" data-minutes="20" type="button">20 min</button>
-        <button class="duration-chip selected" data-minutes="30" type="button">30 min</button>
-        <button class="duration-chip" data-minutes="40" type="button">40 min</button>
-        <button class="duration-chip" data-minutes="50" type="button">50 min</button>
-        <button class="duration-chip" data-minutes="custom" type="button">Custom</button>
-      </div>
-      <div class="duration-custom hidden" id="duration-custom">
-        <input type="number" id="duration-custom-input" min="5" max="120" placeholder="Minutes (5–120)">
-        <span class="duration-custom-hint">Enter a value between 5 and 120 minutes.</span>
-      </div>
     </section>
 
     <section class="panel" id="topic-panel">
@@ -134,9 +108,8 @@
   <main id="view-interview" class="view hidden">
 
     <div class="interview-header">
-      <button class="btn-ghost" id="exit-interview" type="button">&larr; Exit</button>
+      <button class="btn-ghost" id="exit-interview" type="button">&larr; End &amp; exit</button>
       <span class="mode-label" id="mode-label"></span>
-      <span class="timer-display hidden" id="timer-display"></span>
       <div class="tech-tracker" id="tech-tracker" aria-live="polite"></div>
     </div>
 
@@ -163,17 +136,7 @@
       <button class="btn-primary" id="send-btn" type="submit">Send</button>
     </form>
 
-    <button class="btn-primary btn-report" id="get-report-btn" type="button">End Interview</button>
-
-    <div class="confirm-overlay hidden" id="confirm-overlay">
-      <div class="confirm-box">
-        <p id="confirm-message">End this interview?</p>
-        <div class="confirm-actions">
-          <button class="btn-ghost" id="confirm-continue" type="button">Continue</button>
-          <button class="btn-primary" id="confirm-end" type="button">End Interview</button>
-        </div>
-      </div>
-    </div>
+    <button class="btn-primary btn-report" id="get-report-btn" type="button">End &amp; get final report</button>
   </main>
 
   <!-- ───────────── REPORT VIEW ───────────── -->

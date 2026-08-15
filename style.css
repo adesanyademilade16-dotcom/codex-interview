@@ -950,3 +950,98 @@ textarea:focus-visible,
   .voice-bar { grid-area: status; flex-direction: column; align-items: stretch; height: fit-content; margin-bottom: 0; }
   .btn-report { grid-area: report; }
 }
+
+/* ============================================================
+   AI CANDIDATE MODE — conversation + voice composer upgrade
+   These overrides intentionally sit at the end so the existing UI remains
+   the source of truth everywhere else.
+   ============================================================ */
+#view-interview.candidate-mode .transcript {
+  scroll-behavior: smooth;
+  padding-bottom: 24px;
+}
+
+#view-interview.candidate-mode .msg-ai-candidate {
+  align-self: flex-start;
+  margin-right: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top-left-radius: 2px;
+  border-top-right-radius: 10px;
+}
+
+#view-interview.candidate-mode .msg-you {
+  align-self: flex-end;
+  margin-left: auto;
+  background: var(--accent-dim);
+  border: 1px solid var(--border);
+  border-top-right-radius: 2px;
+  border-top-left-radius: 10px;
+}
+
+#view-interview.candidate-mode .response-form.hidden {
+  display: none !important;
+}
+
+/* Voice candidate: the mic becomes the bottom-centre primary action. */
+#view-interview.candidate-mode .voice-bar {
+  justify-content: center;
+  gap: 14px;
+}
+
+#view-interview.candidate-mode .voice-state {
+  flex: 0 0 auto;
+  text-align: center;
+  min-width: 100px;
+}
+
+#view-interview.candidate-mode .voice-viz {
+  display: none;
+}
+
+#view-interview.candidate-mode .mic-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+
+#view-interview.candidate-mode .mic-btn .mic-dot {
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 859px) {
+  #view-interview.candidate-mode .voice-bar {
+    position: sticky;
+    bottom: 8px;
+    z-index: 8;
+    width: 100%;
+    margin-top: 8px;
+    margin-bottom: 0;
+    padding: 10px 14px;
+    border-radius: 999px;
+    backdrop-filter: blur(12px);
+  }
+}
+
+@media (min-width: 1100px) {
+  #view-interview.candidate-mode {
+    grid-template-areas:
+      "header     header"
+      "transcript status"
+      "statusrow  status"
+      "compose    status"
+      "report     report";
+  }
+
+  #view-interview.candidate-mode .voice-bar {
+    position: sticky;
+    top: 90px;
+    align-self: end;
+    justify-content: center;
+    align-items: center;
+    padding: 18px;
+    border-radius: 18px;
+  }
+}

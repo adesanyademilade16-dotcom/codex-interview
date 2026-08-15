@@ -180,10 +180,10 @@ function enterSetup(mode) {
   document.querySelectorAll(".voice-option").forEach((btn) => {
     btn.classList.toggle("selected", btn.dataset.voice === "text");
   });
-  document.getElementById("sensitivity-row").classList.add("hidden");
+  if (document.getElementById("sensitivity-row")) document.getElementById("sensitivity-row").classList.add("hidden");
 
   const showDuration = mode === "interviewer" || mode === "live";
-  durationPanel.classList.toggle("hidden", !showDuration);
+  if (durationPanel) durationPanel.classList.toggle("hidden", !showDuration);
   if (showDuration) resetDurationPicker();
 
   if (mode === "interviewer") {
@@ -210,8 +210,8 @@ document.getElementById("setup-back").addEventListener("click", () => showView("
 // ── Interview length picker (Interviewer / Live only) ─────
 function resetDurationPicker() {
   selectedDurationMinutes = 30;
-  durationCustom.classList.add("hidden");
-  durationCustomInput.value = "";
+  if (durationCustom) durationCustom.classList.add("hidden");
+  if (durationCustomInput) durationCustomInput.value = "";
   document.querySelectorAll(".duration-chip").forEach((b) => b.classList.toggle("selected", b.dataset.minutes === "30"));
 }
 
@@ -219,11 +219,11 @@ document.querySelectorAll(".duration-chip").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".duration-chip").forEach((b) => b.classList.toggle("selected", b === btn));
     if (btn.dataset.minutes === "custom") {
-      durationCustom.classList.remove("hidden");
-      durationCustomInput.focus();
+      if (durationCustom) durationCustom.classList.remove("hidden");
+      if (durationCustomInput) durationCustomInput.focus();
       applyCustomDuration();
     } else {
-      durationCustom.classList.add("hidden");
+      if (durationCustom) durationCustom.classList.add("hidden");
       selectedDurationMinutes = Number(btn.dataset.minutes);
     }
   });
@@ -236,7 +236,7 @@ function applyCustomDuration() {
   }
 }
 
-durationCustomInput.addEventListener("input", applyCustomDuration);
+if (durationCustomInput) durationCustomInput.addEventListener("input", applyCustomDuration);
 
 const sensitivityRow = document.getElementById("sensitivity-row");
 
@@ -246,7 +246,7 @@ document.querySelectorAll(".voice-option").forEach((btn) => {
     document.querySelectorAll(".voice-option").forEach((b) => b.classList.toggle("selected", b === btn));
     // Sensitivity only matters for auto-listen (it tunes silence detection);
     // manual mode has no silence timeout and text mode has no mic at all.
-    sensitivityRow.classList.toggle("hidden", selectedVoice !== "auto");
+    if (sensitivityRow) sensitivityRow.classList.toggle("hidden", selectedVoice !== "auto");
   });
 });
 
@@ -337,7 +337,7 @@ function resetSessionState() {
 function startTimer(minutes) {
   stopTimer();
   timerRemainingSeconds = Math.round(minutes * 60);
-  timerDisplayEl.classList.remove("hidden");
+  if (timerDisplayEl) timerDisplayEl.classList.remove("hidden");
   updateTimerDisplay();
   timerInterval = setInterval(() => {
     timerRemainingSeconds -= 1;
@@ -351,14 +351,15 @@ function startTimer(minutes) {
 function stopTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = null;
-  timerDisplayEl.classList.add("hidden");
-  timerDisplayEl.classList.remove("warn", "critical");
+  if (timerDisplayEl) timerDisplayEl.classList.add("hidden");
+  if (timerDisplayEl) timerDisplayEl.classList.remove("warn", "critical");
 }
 
 function updateTimerDisplay() {
   const clamped = Math.max(0, timerRemainingSeconds);
   const mins = Math.floor(clamped / 60);
   const secs = clamped % 60;
+  if (!timerDisplayEl) return;
   timerDisplayEl.textContent = `${mins}:${String(secs).padStart(2, "0")} remaining`;
   timerDisplayEl.classList.toggle("warn", clamped <= 300 && clamped > 60);
   timerDisplayEl.classList.toggle("critical", clamped <= 60);
@@ -382,27 +383,43 @@ const TTS = (() => {
     return (sentences && sentences.length ? sentences : [text]).map((s) => s.trim()).filter(Boolean);
   }
 
+  let preferredVoice = null;
+
+  function chooseVoice() {
+    if (!("speechSynthesis" in window)) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return null;
+    const preferredNames = [
+      /Microsoft.*(Guy|Ryan|Christopher|Brian|Andrew)/i,
+      /Google.*(US English|UK English)/i,
+      /Samantha/i, /Daniel/i, /Alex/i
+    ];
+    for (const pattern of preferredNames) {
+      const match = voices.find(v => pattern.test(v.name) && /^en[-_]/i.test(v.lang));
+      if (match) return match;
+    }
+    return voices.find(v => /^en[-_]/i.test(v.lang)) || voices[0];
+  }
+
   function speak(text) {
     return new Promise((resolve) => {
-      if (!("speechSynthesis" in window) || !text || !text.trim()) {
-        resolve();
-        return;
-      }
+      if (!("speechSynthesis" in window) || !text || !text.trim()) { resolve(); return; }
       window.speechSynthesis.cancel();
       cancelled = false;
+      preferredVoice = preferredVoice || chooseVoice();
       const chunks = splitIntoChunks(text);
       let i = 0;
 
       function speakNext() {
-        if (cancelled || i >= chunks.length) {
-          resolve();
-          return;
-        }
+        if (cancelled || i >= chunks.length) { resolve(); return; }
         const utter = new SpeechSynthesisUtterance(chunks[i]);
-        utter.rate = 1.02;
-        utter.pitch = 1.0;
+        if (preferredVoice) utter.voice = preferredVoice;
+        // Faster and more conversational than the old 1.02 rate.
+        utter.rate = 1.14;
+        utter.pitch = 0.98;
+        utter.volume = 1;
         utter.onend = () => { i++; speakNext(); };
-        utter.onerror = () => { i++; speakNext(); }; // don't hang the interview on a TTS glitch
+        utter.onerror = () => { i++; speakNext(); };
         window.speechSynthesis.speak(utter);
       }
       speakNext();
@@ -418,6 +435,12 @@ const TTS = (() => {
     return "speechSynthesis" in window && window.speechSynthesis.speaking;
   }
 
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.addEventListener?.("voiceschanged", () => {
+      preferredVoice = chooseVoice();
+    });
+  }
+
   return { speak, stop, isSpeaking };
 })();
 
@@ -425,7 +448,10 @@ const TTS = (() => {
 // the "speaking" FSM state for the duration so the mic can never hear the
 // AI's own voice and mistake it for the candidate's next utterance.
 async function speakIfVoice(text) {
-  if (selectedVoice === "text") return;
+  // AI Candidate is intentionally text-only on the AI side. The user
+  // interviews Adesanya; the candidate response should never be spoken by
+  // the browser, even when the interviewer uses microphone input.
+  if (selectedVoice === "text" || currentMode === "candidate") return;
   setFSM("speaking");
   await TTS.speak(text);
 }
@@ -440,7 +466,12 @@ function configureInterviewChrome() {
 
   const useVoice = selectedVoice !== "text";
   voiceBar.classList.toggle("hidden", !useVoice);
-  micBtn.classList.toggle("hidden", selectedVoice !== "manual");
+  // In AI Candidate voice mode the microphone is the primary composer and
+  // sits at the bottom centre. Text mode is the only mode that exposes Send.
+  const showCandidateMic = currentMode === "candidate" && selectedVoice !== "text";
+  micBtn.classList.toggle("hidden", currentMode === "candidate" ? !showCandidateMic : selectedVoice !== "manual");
+  responseForm.classList.toggle("hidden", currentMode === "candidate" && selectedVoice !== "text");
+  viewInterview.classList.toggle("candidate-mode", currentMode === "candidate");
 }
 
 // ─────────────────────────────────────────────
@@ -490,6 +521,8 @@ async function beginCandidateSession() {
 // ─────────────────────────────────────────────
 async function handleSubmit(e) {
   e.preventDefault();
+  // Voice-based AI Candidate sessions have no text Send action.
+  if (currentMode === "candidate" && selectedVoice !== "text") return;
   const text = responseInput.value.trim();
   if (!text) return;
   await submitTurn(text);
@@ -700,15 +733,30 @@ const ROLE_LABELS = { interviewer: "Interviewer", candidate: "Adesanya", you: "Y
 
 function addMessage(role, content) {
   const div = document.createElement("div");
-  const bubbleRole = role === "you" ? "candidate" : role; // reuse candidate bubble styling for "you"
+  let bubbleRole = role;
+
+  if (currentMode === "candidate") {
+    // In AI Candidate mode: user/interviewer = RIGHT, Adesanya/AI = LEFT.
+    bubbleRole = role === "you" ? "you" : "ai-candidate";
+  } else {
+    bubbleRole = role === "you" ? "candidate" : role;
+  }
+
   div.className = `msg msg-${bubbleRole}`;
   const label = document.createElement("span");
   label.className = "msg-label";
-  label.textContent = ROLE_LABELS[role] || "You";
+  label.textContent = currentMode === "candidate"
+    ? (role === "you" ? "You — Interviewer" : "Adesanya — AI Candidate")
+    : (ROLE_LABELS[role] || "You");
   div.appendChild(label);
   div.appendChild(document.createTextNode(content));
   transcriptEl.appendChild(div);
-  transcriptEl.scrollTop = transcriptEl.scrollHeight;
+
+  // Always move the conversation viewport to the newest turn. requestAnimationFrame
+  // ensures the browser has laid out the new bubble before scrolling.
+  requestAnimationFrame(() => {
+    transcriptEl.scrollTo({ top: transcriptEl.scrollHeight, behavior: "smooth" });
+  });
 }
 
 function setStatus(state, message) {
@@ -835,6 +883,7 @@ let vadSpeechStart = 0;
 let vadSilenceStart = 0;
 let vadMaxTimer = null;
 let voiceFSM = "idle";
+let candidateVoicePaused = false;
 let lastProcessedTranscript = ""; // guards against reprocessing the same utterance twice
 
 function sleep(ms) {
@@ -862,6 +911,7 @@ async function startVoiceIfNeeded() {
 
   micBtn.addEventListener("click", handleMicTap);
   lastProcessedTranscript = "";
+  candidateVoicePaused = false;
 
   if (selectedVoice === "auto") {
     setFSM("listening");
@@ -939,7 +989,7 @@ function setVoiceState(state) {
     transcribing: "Transcribing…",
     generating: currentMode === "candidate" ? "Adesanya is thinking…" : "Interviewer is preparing the next question…",
     thinking: currentMode === "candidate" ? "Adesanya is thinking…" : "Interviewer is preparing the next question…",
-    speaking: currentMode === "candidate" ? "Adesanya is speaking…" : "Interviewer is speaking…",
+    speaking: "Interviewer is speaking…",
     cooldown: "One moment…",
     ready: "Ready",
     stopped: "Idle",
@@ -964,10 +1014,24 @@ function isValidTranscript(raw) {
 
 // ── Manual mode ─────────────────────────────────
 function handleMicTap() {
+  // In AI Candidate voice mode the mic is the bottom-centre conversation
+  // control. Manual mode records on press/release; Auto mode toggles listening.
+  if (currentMode === "candidate" && selectedVoice === "auto") {
+    if (candidateVoicePaused) {
+      candidateVoicePaused = false;
+      setFSM("listening");
+      startVadLoop();
+    } else if (voiceFSM === "listening") {
+      candidateVoicePaused = true;
+      if (vadRafId) cancelAnimationFrame(vadRafId);
+      vadRafId = null;
+      setFSM("idle");
+    }
+    return;
+  }
+
   if (selectedVoice !== "manual") return;
   if (voiceFSM === "recording") {
-    // Flip state the instant we decide to stop — before the async
-    // mediaRecorder "stop" event even fires.
     setFSM("transcribing");
     if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
   } else if (voiceFSM === "idle" || voiceFSM === "listening") {
@@ -976,8 +1040,6 @@ function handleMicTap() {
       await submitAudio(blob);
     });
   }
-  // Any other state (transcribing/generating/cooldown) — ignore the tap,
-  // a turn is already in flight.
 }
 
 // ── Auto mode (VAD) ────────────────────────────
@@ -987,6 +1049,7 @@ function startVadLoop() {
 
   function tick() {
     if (!analyserNode || selectedVoice !== "auto") return;
+    if (currentMode === "candidate" && candidateVoicePaused) return;
     // Only run detection while actually listening or actively recording —
     // any other state means a turn is already in flight, so don't reschedule.
     if (voiceFSM !== "listening" && voiceFSM !== "recording") return;
