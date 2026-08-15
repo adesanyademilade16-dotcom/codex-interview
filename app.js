@@ -61,6 +61,8 @@ const MIN_MEANINGFUL_CHARS = 4;
 // ─────────────────────────────────────────────
 const INTERVIEWER_SYSTEM_PROMPT = `You are a realistic, professional AI technical interviewer for Codex Interview AI, an educational practice tool. This is strictly practice — never suggest ways to cheat in a real interview, and never imply you are anything other than a practice tool.
 
+Always respond in English, even if the candidate's answer comes through in another language (e.g. a transcription error or a typo in a different language) — never switch languages to match them.
+
 Ask ONE question at a time, then wait for the candidate's answer. Your next message should follow up on what they just said before moving to a new subtopic — if they mention a technology, drill one level deeper into it. Increase difficulty as the candidate does well; simplify and stay encouraging if they struggle. Keep questions realistic and concise, testing understanding rather than trivia.
 
 CANDIDATE: Adesanya Ibrahim Akolade — early-career Frontend Developer / UI-UX Designer / AI product builder, based in Lagos, Nigeria. Do not invent employment, certifications, or experience beyond what's listed below.
@@ -88,6 +90,8 @@ When you've covered enough ground for a fair evaluation (typically after 5-8 exc
 }
 
 const CANDIDATE_SYSTEM_PROMPT = `You are Adesanya Ibrahim Akolade, answering interview questions as yourself in a mock practice session. You are the CANDIDATE — the user is the interviewer, asking you questions. Answer in first person, as Adesanya.
+
+Always respond in English, even if the interviewer's question comes through in another language (e.g. a transcription error or a typo in a different language) — never switch languages to match them.
 
 You're an early-career Frontend Developer / UI-UX Designer / early full-stack developer based in Lagos, Nigeria. Sound like a real junior developer talking naturally, not like a written essay. Keep answers tight: usually 3-5 spoken sentences, up to 6-7 for coding/system-design questions where you genuinely need to walk through steps. Answer the actual question first, then support it with one concrete detail or example — but a complete, well-reasoned answer always beats a shorter incomplete one, so don't chop real explanation just to hit a sentence count. Don't restate the question and don't add a closing summary/recap. Confident but not arrogant, easy to say aloud. Never use corporate buzzwords like "leveraged", "results-driven", "cutting-edge", "synergized", "enterprise-grade", "passionate about delivering scalable solutions". Never sound like an AI assistant — it's fine to trail off naturally or sound slightly informal rather than polished and complete every time.
 
@@ -531,9 +535,12 @@ async function beginInterviewerSession(fullSystemPrompt, label) {
   const kickoff = [{ role: "user", content: "(interview session started)" }];
 
   try {
-    const result = await callChat(systemPrompt, kickoff);
+    const streamBubble = addStreamingMessage("interviewer");
+    const result = await callChatStream(systemPrompt, kickoff, (partial) => {
+      streamBubble.update(partial.replace("[[INTERVIEW_COMPLETE]]", "").trimEnd());
+    });
     const { content, complete } = extractCompletion(result.content);
-    addMessage("interviewer", content);
+    streamBubble.update(content);
     history.push({ role: "assistant", content: result.content });
     currentQuestion = content;
     setStatus("ready");
@@ -588,10 +595,15 @@ async function submitTurn(text) {
   await pauseListeningWhileBusy();
 
   try {
-    const result = await callChat(systemPrompt, history);
-    const { content, complete } = extractCompletion(result.content);
     const aiRole = currentMode === "candidate" ? "candidate" : "interviewer";
-    addMessage(aiRole, content);
+    const streamBubble = addStreamingMessage(aiRole);
+    const result = await callChatStream(systemPrompt, history, (partial) => {
+      // Strip the completion marker from the live view so it never flashes
+      // on screen while streaming in.
+      streamBubble.update(partial.replace("[[INTERVIEW_COMPLETE]]", "").trimEnd());
+    });
+    const { content, complete } = extractCompletion(result.content);
+    streamBubble.update(content);
     history.push({ role: "assistant", content: result.content });
     currentQuestion = content;
     setStatus("ready");
@@ -759,6 +771,72 @@ async function callChat(system, messages) {
   return res.json();
 }
 
+// Streams the reply in as it's generated instead of waiting for the whole
+// thing. onDelta is called with each new chunk of text as it arrives so the
+// caller can paint it live. Falls back to the plain /chat call (and returns
+// its result the same shape: {content, provider, model}) on any failure —
+// a slow/broken stream should never mean no answer at all.
+async function callChatStream(system, messages, onDelta) {
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system, messages }),
+    });
+  } catch {
+    return callChat(system, messages);
+  }
+  if (!res.ok || !res.body) return callChat(system, messages);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let meta = { provider: null, model: null };
+  let gotAnyDelta = false;
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
+      for (const event of events) {
+        for (const line of event.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          let payload;
+          try {
+            payload = JSON.parse(line.slice(5).trim());
+          } catch {
+            continue;
+          }
+          if (payload.type === "meta") {
+            meta = { provider: payload.provider, model: payload.model };
+          } else if (payload.type === "delta") {
+            content += payload.content;
+            gotAnyDelta = true;
+            onDelta(content);
+          } else if (payload.type === "done") {
+            content = payload.content ?? content;
+          } else if (payload.type === "error") {
+            throw new Error(payload.error || "stream error");
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // If nothing streamed yet, the plain endpoint can still save the turn.
+    // If partial content already streamed in, keep it — a broken final
+    // chunk of an otherwise-good answer beats discarding it entirely.
+    if (!gotAnyDelta) return callChat(system, messages);
+  }
+
+  if (!content) return callChat(system, messages);
+  return { content, provider: meta.provider, model: meta.model };
+}
+
 async function transcribeBlob(blob) {
   const form = new FormData();
   form.append("audio", blob, "answer.webm");
@@ -773,34 +851,59 @@ async function transcribeBlob(blob) {
 // ─────────────────────────────────────────────
 const ROLE_LABELS = { interviewer: "Interviewer", candidate: "Adesanya", you: "You" };
 
-function addMessage(role, content) {
-  const div = document.createElement("div");
-  let bubbleRole = role;
-
+function bubbleRoleFor(role) {
   if (currentMode === "candidate") {
-    // In AI Candidate mode: user/interviewer = RIGHT, Adesanya/AI = LEFT.
-    bubbleRole = role === "you" ? "you" : "ai-candidate";
-  } else {
-    bubbleRole = role === "you" ? "candidate" : role;
+    return role === "you" ? "you" : "ai-candidate";
   }
+  return role === "you" ? "candidate" : role;
+}
 
-  div.className = `msg msg-${bubbleRole}`;
-  const label = document.createElement("span");
-  label.className = "msg-label";
-  label.textContent = currentMode === "candidate"
+function labelFor(role) {
+  return currentMode === "candidate"
     ? (role === "you" ? "You — Interviewer" : "Adesanya — AI Candidate")
     : (ROLE_LABELS[role] || "You");
-  div.appendChild(label);
-  div.appendChild(document.createTextNode(content));
-  transcriptEl.appendChild(div);
+}
 
-  // Always move the conversation viewport to the newest turn — this must
-  // fire unconditionally (not just when already near the bottom), since in
-  // voice mode the whole point is not having to touch the screen.
+function scrollToLatest() {
   requestAnimationFrame(() => {
     transcriptEl.scrollTo({ top: transcriptEl.scrollHeight, behavior: "auto" });
     if (jumpLatestBtn) jumpLatestBtn.classList.add("hidden");
   });
+}
+
+function addMessage(role, content) {
+  const div = document.createElement("div");
+  div.className = `msg msg-${bubbleRoleFor(role)}`;
+  const label = document.createElement("span");
+  label.className = "msg-label";
+  label.textContent = labelFor(role);
+  div.appendChild(label);
+  div.appendChild(document.createTextNode(content));
+  transcriptEl.appendChild(div);
+  scrollToLatest();
+}
+
+// Creates an empty bubble immediately and returns an updater to paint
+// streamed text into it as chunks arrive, instead of waiting for the full
+// reply before showing anything.
+function addStreamingMessage(role) {
+  const div = document.createElement("div");
+  div.className = `msg msg-${bubbleRoleFor(role)}`;
+  const label = document.createElement("span");
+  label.className = "msg-label";
+  label.textContent = labelFor(role);
+  div.appendChild(label);
+  const textNode = document.createTextNode("");
+  div.appendChild(textNode);
+  transcriptEl.appendChild(div);
+  scrollToLatest();
+
+  return {
+    update(fullText) {
+      textNode.textContent = fullText;
+      scrollToLatest();
+    },
+  };
 }
 
 if (transcriptEl && jumpLatestBtn) {
@@ -949,7 +1052,14 @@ async function startVoiceIfNeeded() {
   if (selectedVoice === "text") return;
 
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+    });
   } catch (err) {
     setFSM("idle");
     addFeedbackError("Microphone access is required for voice practice. You can continue with text mode.");
