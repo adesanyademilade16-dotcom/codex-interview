@@ -31,6 +31,21 @@ const VAD_PRESETS = {
 let sensitivity = "medium"; // "low" | "medium" | "high"
 function VAD() { return VAD_PRESETS[sensitivity]; }
 
+// ─────────────────────────────────────────────
+// DIFFICULTY — controls how hard the AI Interviewer pushes
+// ─────────────────────────────────────────────
+const DIFFICULTY_TEXT = {
+  easy: `
+Difficulty: EASY. Ask foundational, confidence-building questions. Stick to core concepts, avoid trick questions or deep edge cases, and if the candidate struggles, simplify further and stay encouraging rather than pushing harder.`,
+  mid: `
+Difficulty: MID. Ask standard junior/mid-level questions with normal follow-up depth — the default bar for this role level.`,
+  pro: `
+Difficulty: PRO. Push like a senior-level technical screen: expect precise terminology, ask "why" and "what would break" follow-ups, probe trade-offs, and don't let vague answers pass without a follow-up.`,
+  high: `
+Difficulty: HIGH. Interview at staff/principal intensity: rapid, pointed follow-ups, edge cases and failure modes by default, minimal hand-holding, and call out imprecise or hand-wavy answers directly before moving on.`,
+};
+let difficulty = "mid"; // "easy" | "mid" | "pro" | "high"
+
 // Brief pause after a response is displayed before auto-listening resumes.
 // Gives any lingering audio state a moment to settle and prevents the mic
 // from immediately re-triggering on the tail of the previous turn.
@@ -74,7 +89,7 @@ When you've covered enough ground for a fair evaluation (typically after 5-8 exc
 
 const CANDIDATE_SYSTEM_PROMPT = `You are Adesanya Ibrahim Akolade, answering interview questions as yourself in a mock practice session. You are the CANDIDATE — the user is the interviewer, asking you questions. Answer in first person, as Adesanya.
 
-You're an early-career Frontend Developer / UI-UX Designer / early full-stack developer based in Lagos, Nigeria. Sound like a real junior developer talking naturally: conversational, concise (2-6 spoken sentences for most answers; a bit more for coding questions), confident but not arrogant, easy to say aloud. Never use corporate buzzwords like "leveraged", "results-driven", "cutting-edge", "synergized", "enterprise-grade", "passionate about delivering scalable solutions". Never sound like an AI assistant.
+You're an early-career Frontend Developer / UI-UX Designer / early full-stack developer based in Lagos, Nigeria. Sound like a real junior developer talking naturally, not like a written essay. Hard length rule: 2-3 spoken sentences for most answers, 4 sentences max for coding/system questions — answer the actual question in the first sentence, add one concrete supporting detail, then stop. Do not restate the question, do not hedge with throat-clearing ("That's a great question..."), do not stack multiple examples when one will do, and do not summarize what you just said at the end. Confident but not arrogant, easy to say aloud. Never use corporate buzzwords like "leveraged", "results-driven", "cutting-edge", "synergized", "enterprise-grade", "passionate about delivering scalable solutions". Never sound like an AI assistant — it's fine to trail off naturally or sound slightly informal rather than polished and complete every time.
 
 Do not invent employment, clients, companies, certifications, or metrics. Do not claim technologies you haven't actually used. If you genuinely don't know something, say so honestly — e.g. "I haven't worked with that directly, so I don't want to pretend I have. My understanding is..." — then give your best partial answer. Don't bluff.
 
@@ -151,6 +166,7 @@ const voiceVizEl = document.getElementById("voice-viz");
 const micBtn = document.getElementById("mic-btn");
 
 const reportContent = document.getElementById("report-content");
+const jumpLatestBtn = document.getElementById("jump-latest");
 
 // ─────────────────────────────────────────────
 // VIEW SWITCHING
@@ -186,6 +202,10 @@ function enterSetup(mode) {
   if (durationPanel) durationPanel.classList.toggle("hidden", !showDuration);
   if (showDuration) resetDurationPicker();
 
+  const difficultyPanel = document.getElementById("difficulty-panel");
+  if (difficultyPanel) difficultyPanel.classList.toggle("hidden", !showDuration);
+  if (showDuration) resetDifficultyPicker();
+
   if (mode === "interviewer") {
     setupTitle.textContent = "Set up your AI Interviewer session";
     topicPanel.classList.remove("hidden");
@@ -212,12 +232,12 @@ function resetDurationPicker() {
   selectedDurationMinutes = 30;
   if (durationCustom) durationCustom.classList.add("hidden");
   if (durationCustomInput) durationCustomInput.value = "";
-  document.querySelectorAll(".duration-chip").forEach((b) => b.classList.toggle("selected", b.dataset.minutes === "30"));
+  document.querySelectorAll("#duration-grid .duration-chip").forEach((b) => b.classList.toggle("selected", b.dataset.minutes === "30"));
 }
 
-document.querySelectorAll(".duration-chip").forEach((btn) => {
+document.querySelectorAll("#duration-grid .duration-chip").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".duration-chip").forEach((b) => b.classList.toggle("selected", b === btn));
+    document.querySelectorAll("#duration-grid .duration-chip").forEach((b) => b.classList.toggle("selected", b === btn));
     if (btn.dataset.minutes === "custom") {
       if (durationCustom) durationCustom.classList.remove("hidden");
       if (durationCustomInput) durationCustomInput.focus();
@@ -226,6 +246,18 @@ document.querySelectorAll(".duration-chip").forEach((btn) => {
       if (durationCustom) durationCustom.classList.add("hidden");
       selectedDurationMinutes = Number(btn.dataset.minutes);
     }
+  });
+});
+
+function resetDifficultyPicker() {
+  difficulty = "mid";
+  document.querySelectorAll("#difficulty-grid .duration-chip").forEach((b) => b.classList.toggle("selected", b.dataset.difficulty === "mid"));
+}
+
+document.querySelectorAll("#difficulty-grid .duration-chip").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    difficulty = btn.dataset.difficulty;
+    document.querySelectorAll("#difficulty-grid .duration-chip").forEach((b) => b.classList.toggle("selected", b === btn));
   });
 });
 
@@ -258,12 +290,12 @@ document.querySelectorAll(".sensitivity-btn").forEach((btn) => {
 });
 
 document.getElementById("start-full-interview").addEventListener("click", () => {
-  beginInterviewerSession(INTERVIEWER_SYSTEM_PROMPT + FULL_INTERVIEW_SUFFIX, "Full Interview");
+  beginInterviewerSession(INTERVIEWER_SYSTEM_PROMPT + DIFFICULTY_TEXT[difficulty] + FULL_INTERVIEW_SUFFIX, "Full Interview");
 });
 
 document.querySelectorAll(".topic-chip").forEach((btn) => {
   btn.addEventListener("click", () => {
-    beginInterviewerSession(INTERVIEWER_SYSTEM_PROMPT + topicSuffix(btn.dataset.topic), btn.dataset.topic);
+    beginInterviewerSession(INTERVIEWER_SYSTEM_PROMPT + DIFFICULTY_TEXT[difficulty] + topicSuffix(btn.dataset.topic), btn.dataset.topic);
   });
 });
 
@@ -271,7 +303,7 @@ beginSessionBtn.addEventListener("click", () => {
   if (currentMode === "candidate") {
     beginCandidateSession();
   } else if (currentMode === "live") {
-    beginInterviewerSession(INTERVIEWER_SYSTEM_PROMPT + FULL_INTERVIEW_SUFFIX, "Live Interview");
+    beginInterviewerSession(INTERVIEWER_SYSTEM_PROMPT + DIFFICULTY_TEXT[difficulty] + FULL_INTERVIEW_SUFFIX, "Live Interview");
   }
 });
 
@@ -337,6 +369,7 @@ function resetSessionState() {
   lastProcessedTranscript = "";
   reviewBtn.disabled = true;
   stopTimer();
+  if (jumpLatestBtn) jumpLatestBtn.classList.add("hidden");
   if (confirmOverlay) confirmOverlay.classList.add("hidden");
 }
 
@@ -761,10 +794,27 @@ function addMessage(role, content) {
   div.appendChild(document.createTextNode(content));
   transcriptEl.appendChild(div);
 
-  // Always move the conversation viewport to the newest turn. requestAnimationFrame
-  // ensures the browser has laid out the new bubble before scrolling.
+  // Only auto-scroll if the user is already near the bottom — if they've
+  // scrolled up to reread something, respect that instead of yanking them
+  // back down; show the jump button so they can return to it manually.
+  const nearBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 120;
   requestAnimationFrame(() => {
+    if (nearBottom) {
+      transcriptEl.scrollTo({ top: transcriptEl.scrollHeight, behavior: "smooth" });
+    } else if (jumpLatestBtn) {
+      jumpLatestBtn.classList.remove("hidden");
+    }
+  });
+}
+
+if (transcriptEl && jumpLatestBtn) {
+  transcriptEl.addEventListener("scroll", () => {
+    const atBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 40;
+    if (atBottom) jumpLatestBtn.classList.add("hidden");
+  });
+  jumpLatestBtn.addEventListener("click", () => {
     transcriptEl.scrollTo({ top: transcriptEl.scrollHeight, behavior: "smooth" });
+    jumpLatestBtn.classList.add("hidden");
   });
 }
 

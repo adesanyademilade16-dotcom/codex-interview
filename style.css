@@ -229,6 +229,15 @@ textarea:focus-visible,
   gap: 10px;
   margin-bottom: 14px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 20;
+  padding: 10px 0;
+  margin: -16px -20px 14px;
+  padding-left: 20px;
+  padding-right: 20px;
+  border-bottom: 1px solid var(--border);
 }
 
 .tech-tracker {
@@ -621,6 +630,33 @@ textarea:focus-visible,
   color: #E35D41;
   border-color: #E35D41;
   animation: mic-pulse 1s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────
+   JUMP TO LATEST
+───────────────────────────────────────────── */
+.jump-latest {
+  position: fixed;
+  left: 50%;
+  bottom: 108px;
+  transform: translateX(-50%);
+  z-index: 15;
+  background: var(--surface-2);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+
+.jump-latest:active { opacity: 0.85; }
+
+@media (min-width: 1100px) {
+  .jump-latest { left: auto; right: 264px; transform: none; }
 }
 
 /* ─────────────────────────────────────────────

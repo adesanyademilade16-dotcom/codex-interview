@@ -81,6 +81,41 @@
           <span class="voice-option-desc">Type your responses</span>
         </button>
       </div>
+
+      <div class="sensitivity-row hidden" id="sensitivity-row">
+        <span class="sensitivity-label">Mic sensitivity</span>
+        <div class="sensitivity-options">
+          <button class="sensitivity-btn" data-sensitivity="low" type="button">Low</button>
+          <button class="sensitivity-btn selected" data-sensitivity="medium" type="button">Medium</button>
+          <button class="sensitivity-btn" data-sensitivity="high" type="button">High</button>
+        </div>
+        <span class="sensitivity-hint">Low forgives natural pauses; High cuts off sooner for snappier turns.</span>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="difficulty-panel">
+      <h2 class="panel-title">Difficulty</h2>
+      <div class="duration-grid" id="difficulty-grid">
+        <button class="duration-chip" data-difficulty="easy" type="button">Easy</button>
+        <button class="duration-chip selected" data-difficulty="mid" type="button">Mid</button>
+        <button class="duration-chip" data-difficulty="pro" type="button">Pro</button>
+        <button class="duration-chip" data-difficulty="high" type="button">High</button>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="duration-panel">
+      <h2 class="panel-title">Interview length</h2>
+      <div class="duration-grid" id="duration-grid">
+        <button class="duration-chip" data-minutes="15" type="button">15 min</button>
+        <button class="duration-chip selected" data-minutes="30" type="button">30 min</button>
+        <button class="duration-chip" data-minutes="45" type="button">45 min</button>
+        <button class="duration-chip" data-minutes="60" type="button">60 min</button>
+        <button class="duration-chip" data-minutes="custom" type="button">Custom</button>
+      </div>
+      <div class="duration-custom hidden" id="duration-custom">
+        <input type="number" id="duration-custom-input" min="5" max="120" placeholder="Minutes (5-120)">
+        <span class="duration-custom-hint">Timer ends the session automatically when time runs out.</span>
+      </div>
     </section>
 
     <section class="panel" id="topic-panel">
@@ -110,6 +145,7 @@
     <div class="interview-header">
       <button class="btn-ghost" id="exit-interview" type="button">&larr; End &amp; exit</button>
       <span class="mode-label" id="mode-label"></span>
+      <span class="timer-display hidden" id="timer-display"></span>
       <div class="tech-tracker" id="tech-tracker" aria-live="polite"></div>
     </div>
 
@@ -124,6 +160,7 @@
     </div>
 
     <div class="transcript" id="transcript" aria-live="polite"></div>
+    <button class="jump-latest hidden" id="jump-latest" type="button">&darr; Latest reply</button>
 
     <div class="status-row">
       <div class="status-line" id="status-line">Ready</div>
