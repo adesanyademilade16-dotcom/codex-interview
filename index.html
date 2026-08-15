@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codex Interview AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-view="dashboard">
+
+<div class="app-shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">&#9670;</span>
+      <span class="brand-name">CODEX <span class="brand-accent">INTERVIEW</span> AI</span>
+    </div>
+    <div class="mode-banner">Practice mode — helps you prepare independently, never used during a real interview</div>
+  </header>
+
+  <!-- ───────────── DASHBOARD VIEW ───────────── -->
+  <main id="view-dashboard" class="view">
+
+    <section class="hero">
+      <p class="eyebrow">Interview Simulator</p>
+      <h1>Practice.<br>Understand.<br><span class="brand-accent">Interview with confidence.</span></h1>
+      <button class="btn-primary" id="start-full-interview">Start Full Interview</button>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Practice Areas</h2>
+      <div class="topic-grid" id="topic-grid">
+        <button class="topic-chip" data-topic="JavaScript">JavaScript</button>
+        <button class="topic-chip" data-topic="React">React</button>
+        <button class="topic-chip" data-topic="HTML/CSS">HTML/CSS</button>
+        <button class="topic-chip" data-topic="APIs">APIs</button>
+        <button class="topic-chip" data-topic="Git">Git</button>
+        <button class="topic-chip" data-topic="System Thinking">System Thinking</button>
+        <button class="topic-chip" data-topic="Behavioral">Behavioral</button>
+        <button class="topic-chip" data-topic="UI/UX">UI/UX</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Recent Performance</h2>
+      <div class="stat-row" id="stat-row">
+        <div class="stat"><span class="stat-value" data-stat="technical">—</span><span class="stat-label">Technical</span></div>
+        <div class="stat"><span class="stat-value" data-stat="communication">—</span><span class="stat-label">Communication</span></div>
+        <div class="stat"><span class="stat-value" data-stat="problem_solving">—</span><span class="stat-label">Problem Solving</span></div>
+      </div>
+      <p class="empty-note" id="stat-empty-note">Complete an interview to see your scores here.</p>
+    </section>
+
+  </main>
+
+  <!-- ───────────── INTERVIEW VIEW ───────────── -->
+  <main id="view-interview" class="view hidden">
+
+    <div class="interview-header">
+      <button class="btn-ghost" id="exit-interview" type="button">&larr; End &amp; exit</button>
+      <div class="tech-tracker" id="tech-tracker" aria-live="polite"></div>
+    </div>
+
+    <div class="transcript" id="transcript" aria-live="polite"></div>
+
+    <div class="status-row">
+      <div class="status-line" id="status-line">Ready</div>
+      <button class="btn-ghost" id="review-btn" type="button" disabled>Review last answer</button>
+    </div>
+
+    <form class="response-form" id="response-form">
+      <label class="sr-only" for="response-input">Your answer</label>
+      <textarea id="response-input" placeholder="Type your answer…" rows="3" required></textarea>
+      <button class="btn-primary" id="send-btn" type="submit">Send</button>
+    </form>
+
+  </main>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
