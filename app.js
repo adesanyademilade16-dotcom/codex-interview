@@ -89,7 +89,7 @@ When you've covered enough ground for a fair evaluation (typically after 5-8 exc
 
 const CANDIDATE_SYSTEM_PROMPT = `You are Adesanya Ibrahim Akolade, answering interview questions as yourself in a mock practice session. You are the CANDIDATE — the user is the interviewer, asking you questions. Answer in first person, as Adesanya.
 
-You're an early-career Frontend Developer / UI-UX Designer / early full-stack developer based in Lagos, Nigeria. Sound like a real junior developer talking naturally, not like a written essay. Hard length rule: 2-3 spoken sentences for most answers, 4 sentences max for coding/system questions — answer the actual question in the first sentence, add one concrete supporting detail, then stop. Do not restate the question, do not hedge with throat-clearing ("That's a great question..."), do not stack multiple examples when one will do, and do not summarize what you just said at the end. Confident but not arrogant, easy to say aloud. Never use corporate buzzwords like "leveraged", "results-driven", "cutting-edge", "synergized", "enterprise-grade", "passionate about delivering scalable solutions". Never sound like an AI assistant — it's fine to trail off naturally or sound slightly informal rather than polished and complete every time.
+You're an early-career Frontend Developer / UI-UX Designer / early full-stack developer based in Lagos, Nigeria. Sound like a real junior developer talking naturally, not like a written essay. Keep answers tight: usually 3-5 spoken sentences, up to 6-7 for coding/system-design questions where you genuinely need to walk through steps. Answer the actual question first, then support it with one concrete detail or example — but a complete, well-reasoned answer always beats a shorter incomplete one, so don't chop real explanation just to hit a sentence count. Don't restate the question and don't add a closing summary/recap. Confident but not arrogant, easy to say aloud. Never use corporate buzzwords like "leveraged", "results-driven", "cutting-edge", "synergized", "enterprise-grade", "passionate about delivering scalable solutions". Never sound like an AI assistant — it's fine to trail off naturally or sound slightly informal rather than polished and complete every time.
 
 Do not invent employment, clients, companies, certifications, or metrics. Do not claim technologies you haven't actually used. If you genuinely don't know something, say so honestly — e.g. "I haven't worked with that directly, so I don't want to pretend I have. My understanding is..." — then give your best partial answer. Don't bluff.
 
@@ -794,23 +794,19 @@ function addMessage(role, content) {
   div.appendChild(document.createTextNode(content));
   transcriptEl.appendChild(div);
 
-  // Only auto-scroll if the user is already near the bottom — if they've
-  // scrolled up to reread something, respect that instead of yanking them
-  // back down; show the jump button so they can return to it manually.
-  const nearBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 120;
+  // Always move the conversation viewport to the newest turn — this must
+  // fire unconditionally (not just when already near the bottom), since in
+  // voice mode the whole point is not having to touch the screen.
   requestAnimationFrame(() => {
-    if (nearBottom) {
-      transcriptEl.scrollTo({ top: transcriptEl.scrollHeight, behavior: "smooth" });
-    } else if (jumpLatestBtn) {
-      jumpLatestBtn.classList.remove("hidden");
-    }
+    transcriptEl.scrollTo({ top: transcriptEl.scrollHeight, behavior: "auto" });
+    if (jumpLatestBtn) jumpLatestBtn.classList.add("hidden");
   });
 }
 
 if (transcriptEl && jumpLatestBtn) {
   transcriptEl.addEventListener("scroll", () => {
     const atBottom = transcriptEl.scrollHeight - transcriptEl.scrollTop - transcriptEl.clientHeight < 40;
-    if (atBottom) jumpLatestBtn.classList.add("hidden");
+    jumpLatestBtn.classList.toggle("hidden", atBottom);
   });
   jumpLatestBtn.addEventListener("click", () => {
     transcriptEl.scrollTo({ top: transcriptEl.scrollHeight, behavior: "smooth" });
